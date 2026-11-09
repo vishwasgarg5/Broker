@@ -1,0 +1,22 @@
+# Generated data and artifacts
+/data/*
+!/data/.gitkeep
+/predictions/*
+!/predictions/.gitkeep
+/logs/*
+!/logs/.gitkeep
+/models/*
+!/models/.gitkeep
+/run_artifacts/
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.coverage
+htmlcov/
+# Secrets
+.env
+.env.*
+!.env.example
