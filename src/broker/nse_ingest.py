@@ -160,10 +160,11 @@ def write_ingestion(session: date, archive: bytes, records: list[dict], root: Pa
 
     stamp = datetime.now(timezone.utc).isoformat()
     raw_hash = hashlib.sha256(archive).hexdigest()
-    raw_path = raw_dir / f"bhavcopy_{session:%Y%m%d}.zip"
+    revision = raw_hash[:12]
+    raw_path = raw_dir / f"bhavcopy_{session:%Y%m%d}_{revision}.zip"
     raw_path.write_bytes(archive)
 
-    normalized_path = normalized_dir / f"nse_equity_{session.isoformat()}.csv"
+    normalized_path = normalized_dir / f"nse_equity_{session.isoformat()}_{revision}.csv"
     fieldnames = list(records[0])
     with normalized_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -186,7 +187,7 @@ def write_ingestion(session: date, archive: bytes, records: list[dict], root: Pa
         "series_filter": "EQ",
         "research_only": True,
     }
-    manifest_path = manifest_dir / f"nse_cm_{session.isoformat()}.json"
+    manifest_path = manifest_dir / f"nse_cm_{session.isoformat()}_{revision}.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest
 
@@ -204,7 +205,7 @@ def run(target_date: date | None = None, root: Path | None = None) -> dict:
         "session_date": session.isoformat(),
         "records": len(records),
         "source_id": NSE_SOURCE_ID,
-        "manifest": f"data/manifests/nse_cm_{session.isoformat()}.json",
+        "manifest": f"data/manifests/nse_cm_{session.isoformat()}_{manifest['raw_sha256'][:12]}.json",
     }, indent=2))
     return manifest
 
