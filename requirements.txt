@@ -1,0 +1,2 @@
+# Phase 1 uses only the Python standard library.
+# Pin data and ML dependencies in later phases alongside implemented interfaces.
