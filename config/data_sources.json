@@ -1,6 +1,57 @@
 {
  "schema_version":"1.0.0",
- "source_policy":{"official_exchange_or_issuer_source_preferred":true,"store_source_name_and_retrieved_at":true,"store_exchange_session_date":true,"store_raw_response_hash":true,"respect_provider_terms_and_rate_limits":true,"no_silent_source_fallback":true},
- "priorities":{"nse_bse_reference_and_corporate_actions":["official_exchange"],"ohlcv":["licensed_or_official_source","approved_secondary_source"],"fundamentals":["issuer_filings","approved_point_in_time_provider"],"market_calendar":["official_exchange_calendar"],"mutual_funds_and_ipo":["amfi_or_issuer_or_exchange"],"gsec_sgb":["rbi_or_issuer"],"mcx":["official_or_licensed_market_data"]},
+ "source_policy":{
+  "official_exchange_or_issuer_source_preferred":true,
+  "store_source_name_and_retrieved_at":true,
+  "store_exchange_session_date":true,
+  "store_raw_response_hash":true,
+  "respect_provider_terms_and_rate_limits":true,
+  "no_silent_source_fallback":true,
+  "source_failures_block_ingestion":true
+ },
+ "sources":{
+  "nse_cm_udiff_bhavcopy":{
+   "source_id":"NSE_CM_UDIFF_BHAVCOPY",
+   "owner":"National Stock Exchange of India",
+   "url_template":"https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{YYYYMMDD}_F_0000.csv.zip",
+   "format":"zip_csv",
+   "coverage":"NSE capital-market segment; UDiFF format",
+   "series_filter":"EQ",
+   "implemented":true,
+   "fallback":null
+  },
+  "nse_nifty50_constituents":{
+   "source_id":"NSE_INDICES_NIFTY50_CONSTITUENTS",
+   "owner":"NSE Indices",
+   "url":"https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv",
+   "format":"csv",
+   "implemented":true,
+   "membership_semantics":"current observation only; not effective-dated historical membership"
+  },
+  "nse_market_calendar":{
+   "source_id":"NSE_OFFICIAL_MARKET_CALENDAR",
+   "owner":"National Stock Exchange of India",
+   "url":"https://www.nseindia.com/resources/exchange-communication-holidays",
+   "implemented":false,
+   "required_before_model_use":true
+  },
+  "bse_cash_bhavcopy":{
+   "source_id":"BSE_UDIFF_BHAVCOPY",
+   "owner":"BSE",
+   "implemented":false,
+   "required_before_BSE_coverage":true
+  }
+ },
+ "priorities":{
+  "nse_cash_ohlcv":["nse_cm_udiff_bhavcopy"],
+  "nifty50_universe":["nse_nifty50_constituents"],
+  "nse_calendar":["nse_market_calendar"],
+  "bse_ohlcv":["bse_cash_bhavcopy"],
+  "nse_bse_reference_and_corporate_actions":["official_exchange"],
+  "fundamentals":["issuer_filings","approved_point_in_time_provider"],
+  "mutual_funds_and_ipo":["amfi_or_issuer_or_exchange"],
+  "gsec_sgb":["rbi_or_issuer"],
+  "mcx":["official_or_licensed_market_data"]
+ },
  "fallback_requires":["explicit_source_id","retrieval_timestamp","quality_check","audit_log"]
 }
