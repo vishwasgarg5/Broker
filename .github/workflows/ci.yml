@@ -1,0 +1,27 @@
+name: BROKER - Phase 1 CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: broker-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate JSON configuration and schemas
+        run: python -c "import json,pathlib; files=list(pathlib.Path('config').glob('*.json'))+list(pathlib.Path('schemas').glob('*.json')); [json.loads(p.read_text()) for p in files]; print(f'Validated {len(files)} JSON files')"
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Run validation self-check
+        run: PYTHONPATH=src python -m broker.validation
