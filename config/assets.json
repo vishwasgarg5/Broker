@@ -1,0 +1,18 @@
+{
+  "schema_version":"1.0.0",
+  "base_currency":"INR",
+  "markets":{"india":{"exchanges":["NSE","BSE"],"priority":1,"asset_classes":{
+    "equity_cash":{"enabled":true,"priority":1},
+    "index":{"enabled":true,"priority":1},
+    "fo_reference":{"enabled":true,"priority":2,"note":"Research/reference data only"},
+    "etf":{"enabled":true,"priority":2},
+    "mutual_fund":{"enabled":true,"priority":3},
+    "ipo":{"enabled":true,"priority":3},
+    "gsec":{"enabled":true,"priority":3},
+    "sgb":{"enabled":true,"priority":3},
+    "mcx_commodity":{"enabled":true,"priority":3,"symbols":["GOLD","SILVER","CRUDEOIL"]}
+  }}},
+  "universes":{"NIFTY50":{"market":"india","asset_class":"equity_cash"},"BANKNIFTY":{"market":"india","asset_class":"index"},"NIFTY_SECTORAL":{"market":"india","asset_class":"index"},"LIQUID_ETFS":{"market":"india","asset_class":"etf"}},
+  "deferred_markets":["US_EQUITIES","CRYPTO","INTERNATIONAL_ETFS"],
+  "universe_policy":{"require_effective_from":true,"retain_delisted_members":true,"never_rewrite_historical_membership":true}
+}
