@@ -55,12 +55,18 @@ def fetch_nifty50_symbols() -> tuple[list[dict], bytes]:
 
 def write_universe_observation(rows: list[dict], raw: bytes, root: Path) -> dict:
     observed_at = datetime.now(timezone.utc).isoformat()
-    observed_date = datetime.now(timezone.utc).date().isoformat()
+    observed_now = datetime.now(timezone.utc)
+    observed_date = observed_now.date().isoformat()
+    observation_id = observed_now.strftime("%Y%m%dT%H%M%SZ")
     directory = root / "data" / "universe" / "observations"
+    raw_dir = root / "data" / "raw" / "nse" / "indices"
     manifest_dir = root / "data" / "manifests"
     directory.mkdir(parents=True, exist_ok=True)
+    raw_dir.mkdir(parents=True, exist_ok=True)
     manifest_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = directory / f"nifty50_{observed_date}.csv"
+    raw_path = raw_dir / f"nifty50_{observation_id}.csv"
+    raw_path.write_bytes(raw)
+    csv_path = directory / f"nifty50_{observation_id}.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
@@ -80,7 +86,8 @@ def write_universe_observation(rows: list[dict], raw: bytes, root: Path) -> dict
         "pit_reason": "Current constituent list is an observation, not an effective-dated membership history.",
         "normalized_file": str(csv_path.relative_to(root)),
     }
-    path = manifest_dir / f"nifty50_observation_{observed_date}.json"
+    manifest["raw_file"] = str(raw_path.relative_to(root))
+    path = manifest_dir / f"nifty50_observation_{observation_id}.json"
     path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest
 
