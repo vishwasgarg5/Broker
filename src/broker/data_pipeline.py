@@ -6,6 +6,8 @@ import csv
 import hashlib
 import io
 import json
+import time
+import urllib.error
 import urllib.request
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -16,22 +18,60 @@ from .validation import ValidationError
 NIFTY50_CSV_URL = "https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv"
 
 
-def fetch_nifty50_symbols() -> tuple[list[dict], bytes]:
+def fetch_nifty50_symbols(attempts: int = 3, timeout: int = 60) -> tuple[list[dict], bytes]:
+    """Download official Nifty 50 constituent list with retries for transient errors."""
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
     request = urllib.request.Request(
         NIFTY50_CSV_URL,
-        headers={"User-Agent": USER_AGENT, "Accept": "text/csv,*/*"},
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "text/csv,*/*",
+            "Accept-Encoding": "identity",
+        },
     )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = response.read()
-    except Exception as exc:
-        raise ValidationError(f"Official NSE Nifty 50 constituent download failed: {exc}") from exc
+    last_error: Exception | None = None
+    payload: bytes | None = None
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                if response.status != 200:
+                    raise ValidationError(f"NSE Nifty 50 returned HTTP {response.status}")
+                payload = response.read()
+                if not payload:
+                    raise ValidationError("NSE Nifty 50 returned an empty response")
+            break
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code == 404:
+                raise ValidationError("NSE Nifty 50 constituent file not found (404)") from exc
+            if exc.code in (403, 429, 500, 502, 503, 504) and attempt + 1 < attempts:
+                time.sleep(2 ** attempt)
+                continue
+            raise ValidationError(
+                f"Official NSE Nifty 50 download failed with HTTP {exc.code}"
+            ) from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(2 ** attempt)
+                continue
+            raise ValidationError(
+                f"Official NSE Nifty 50 constituent download failed: {exc}"
+            ) from exc
+    else:
+        raise ValidationError(
+            f"Official NSE Nifty 50 constituent download failed after {attempts} "
+            f"attempts: {last_error}"
+        )
+
+    assert payload is not None
     try:
         reader = csv.DictReader(io.StringIO(payload.decode("utf-8-sig")))
         if not reader.fieldnames or "Symbol" not in reader.fieldnames:
             raise ValidationError("NSE Nifty 50 CSV does not contain required Symbol column")
         rows = []
-        seen = set()
+        seen: set[str] = set()
         for row in reader:
             symbol = (row.get("Symbol") or "").strip().upper()
             if not symbol:
@@ -48,6 +88,7 @@ def fetch_nifty50_symbols() -> tuple[list[dict], bytes]:
             })
     except UnicodeDecodeError as exc:
         raise ValidationError("NSE Nifty 50 CSV is not valid UTF-8") from exc
+
     if len(rows) != 50:
         raise ValidationError(f"Expected 50 Nifty 50 constituents, received {len(rows)}")
     return rows, payload
