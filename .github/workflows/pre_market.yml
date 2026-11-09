@@ -31,15 +31,15 @@ jobs:
           python -m unittest discover -s tests -v
           PYTHONPATH=src python -m broker.validation
 
-      - name: Run NSE data pipeline (official UDiFF + Nifty 50 observation)
+      - name: Run independent NSE data sources (UDiFF + Nifty 50 observation)
         id: pipeline
+        continue-on-error: true
         run: |
           set -euo pipefail
           PYTHONPATH=src python src/data_pipeline.py
-        # Failures (network, 404 after look-back, schema, OHLC consistency,
-        # duplicate sessions, empty EQ set, etc.) must fail the job.
 
-      - name: Collect provenance and data artifacts
+      - name: Collect provenance and any available data artifacts
+        if: always()
         run: |
           set -euo pipefail
           mkdir -p run_artifacts
@@ -51,27 +51,34 @@ jobs:
             echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
             echo "triggered_by=${GITHUB_EVENT_NAME}"
             echo "actor=${GITHUB_ACTOR}"
+            echo "pipeline_outcome=${{ steps.pipeline.outcome }}"
             date -u +"retrieved_at_utc=%Y-%m-%dT%H:%M:%SZ"
           } > run_artifacts/run-manifest.txt
 
-          # Copy only the newly produced data tree (raw, normalized, manifests, universe observations)
           if [ -d data ]; then
             cp -a data run_artifacts/data
           else
-            echo "No data directory produced by pipeline" >&2
-            exit 1
+            echo "No data directory was produced by either source." > run_artifacts/NO_DATA.txt
           fi
 
-          # Quick inventory for the Actions log
           echo "=== Artifact inventory ==="
           find run_artifacts -type f | sort
-          echo "=== Manifests ==="
-          find run_artifacts/data/manifests -name '*.json' -exec echo '--- {} ---' \; -exec cat {} \;
+          if [ -d run_artifacts/data/manifests ]; then
+            echo "=== Manifests ==="
+            find run_artifacts/data/manifests -name '*.json' -exec echo '--- {} ---' \\; -exec cat {} \\;
+          fi
 
-      - name: Upload run-scoped artifacts
+      - name: Upload run-scoped partial or complete artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: broker-pre-market-${{ github.run_id }}-${{ github.run_attempt }}
           path: run_artifacts/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Fail job when either required NSE source failed
+        if: always() && steps.pipeline.outcome != 'success'
+        run: |
+          echo "At least one required NSE source failed. Available partial artifacts were uploaded."
+          exit 1
