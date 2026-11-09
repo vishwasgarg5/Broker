@@ -1,17 +1,22 @@
 name: BROKER - Pre-market research pipeline
 on:
   workflow_dispatch:
+    inputs:
+      date:
+        description: "Latest acceptable NSE session date (YYYY-MM-DD); blank selects latest published session"
+        required: false
+        type: string
   schedule:
-    - cron: "30 0 * * 1-5"
+    - cron: "30 0 * * 1-5" # 06:00 IST; actual session resolved from NSE archive availability
 permissions:
   contents: read
 concurrency:
   group: broker-pre-market
   cancel-in-progress: false
 jobs:
-  foundation-check:
+  ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,13 +26,19 @@ jobs:
         run: |
           python -m unittest discover -s tests -v
           PYTHONPATH=src python -m broker.validation
-      - name: Create run manifest
+      - name: Ingest official NSE Nifty 50 snapshot and latest cash bhavcopy
+        env:
+          REQUESTED_DATE: ${{ github.event.inputs.date }}
         run: |
-          mkdir -p run_artifacts
-          printf 'workflow=pre_market\nmode=research_and_paper_only\ncommit=%s\n' "$GITHUB_SHA" > run_artifacts/run-manifest.txt
-      - uses: actions/upload-artifact@v4
+          if [ -n "$REQUESTED_DATE" ]; then
+            python src/data_pipeline.py --date "$REQUESTED_DATE"
+          else
+            python src/data_pipeline.py
+          fi
+      - name: Upload immutable run-scoped market data
+        uses: actions/upload-artifact@v4
         with:
-          name: broker-pre-market-${{ github.run_id }}
-          path: run_artifacts/
+          name: broker-market-data-${{ github.run_id }}
+          path: data/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
