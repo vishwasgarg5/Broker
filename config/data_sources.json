@@ -1,0 +1,6 @@
+{
+ "schema_version":"1.0.0",
+ "source_policy":{"official_exchange_or_issuer_source_preferred":true,"store_source_name_and_retrieved_at":true,"store_exchange_session_date":true,"store_raw_response_hash":true,"respect_provider_terms_and_rate_limits":true,"no_silent_source_fallback":true},
+ "priorities":{"nse_bse_reference_and_corporate_actions":["official_exchange"],"ohlcv":["licensed_or_official_source","approved_secondary_source"],"fundamentals":["issuer_filings","approved_point_in_time_provider"],"market_calendar":["official_exchange_calendar"],"mutual_funds_and_ipo":["amfi_or_issuer_or_exchange"],"gsec_sgb":["rbi_or_issuer"],"mcx":["official_or_licensed_market_data"]},
+ "fallback_requires":["explicit_source_id","retrieval_timestamp","quality_check","audit_log"]
+}
