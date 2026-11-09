@@ -1,44 +1,77 @@
 name: BROKER - Pre-market research pipeline
+
 on:
   workflow_dispatch:
-    inputs:
-      date:
-        description: "Latest acceptable NSE session date (YYYY-MM-DD); blank selects latest published session"
-        required: false
-        type: string
   schedule:
-    - cron: "30 0 * * 1-5" # 06:00 IST; actual session resolved from NSE archive availability
+    # ~06:00 IST (00:30 UTC) Mon–Fri. Calendar gating will be added in Priority 2.
+    - cron: "30 0 * * 1-5"
+
 permissions:
   contents: read
+
 concurrency:
   group: broker-pre-market
   cancel-in-progress: false
+
 jobs:
   ingest:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Validate contracts and configuration
+
+      - name: Validate contracts, configuration and unit tests
         run: |
           python -m unittest discover -s tests -v
           PYTHONPATH=src python -m broker.validation
-      - name: Ingest official NSE Nifty 50 snapshot and latest cash bhavcopy
-        env:
-          REQUESTED_DATE: ${{ github.event.inputs.date }}
+
+      - name: Run NSE data pipeline (official UDiFF + Nifty 50 observation)
+        id: pipeline
         run: |
-          if [ -n "$REQUESTED_DATE" ]; then
-            python src/data_pipeline.py --date "$REQUESTED_DATE"
+          set -euo pipefail
+          PYTHONPATH=src python src/data_pipeline.py
+        # Failures (network, 404 after look-back, schema, OHLC consistency,
+        # duplicate sessions, empty EQ set, etc.) must fail the job.
+
+      - name: Collect provenance and data artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p run_artifacts
+          {
+            echo "workflow=pre_market"
+            echo "mode=research_and_paper_only"
+            echo "commit=${GITHUB_SHA}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "triggered_by=${GITHUB_EVENT_NAME}"
+            echo "actor=${GITHUB_ACTOR}"
+            date -u +"retrieved_at_utc=%Y-%m-%dT%H:%M:%SZ"
+          } > run_artifacts/run-manifest.txt
+
+          # Copy only the newly produced data tree (raw, normalized, manifests, universe observations)
+          if [ -d data ]; then
+            cp -a data run_artifacts/data
           else
-            python src/data_pipeline.py
+            echo "No data directory produced by pipeline" >&2
+            exit 1
           fi
-      - name: Upload immutable run-scoped market data
+
+          # Quick inventory for the Actions log
+          echo "=== Artifact inventory ==="
+          find run_artifacts -type f | sort
+          echo "=== Manifests ==="
+          find run_artifacts/data/manifests -name '*.json' -exec echo '--- {} ---' \; -exec cat {} \;
+
+      - name: Upload run-scoped artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: broker-market-data-${{ github.run_id }}
-          path: data/
+          name: broker-pre-market-${{ github.run_id }}-${{ github.run_attempt }}
+          path: run_artifacts/
           if-no-files-found: error
           retention-days: 30
