@@ -5,6 +5,7 @@ import unittest
 import zipfile
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -16,7 +17,48 @@ HEADERS = "TradDt,TckrSymb,SctySrs,OpnPric,HghPric,LwPric,ClsPric,TtlTradgVol"
 def csv_bytes(rows):
     return (HEADERS + "\n" + "\n".join(rows) + "\n").encode()
 
+def nifty50_bytes():
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["Company Name", "Industry", "Symbol", "Series", "ISIN Code"])
+    writer.writeheader()
+    for index in range(50):
+        writer.writerow({
+            "Company Name": f"Company {index}",
+            "Industry": "Test",
+            "Symbol": f"TEST{index:02d}",
+            "Series": "EQ",
+            "ISIN Code": f"INE{index:07d}",
+        })
+    return output.getvalue().encode()
+
+
 class NSEIngestionTests(unittest.TestCase):
+    def test_nifty50_retries_transient_timeout_then_succeeds(self):
+        class Response:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return nifty50_bytes()
+
+        with patch("broker.data_pipeline.urllib.request.urlopen",
+                   side_effect=[TimeoutError("temporary timeout"), Response()]) as urlopen, \
+             patch("broker.data_pipeline.time.sleep") as sleep:
+            rows, raw = fetch_nifty50_symbols(attempts=3, timeout=60)
+        self.assertEqual(len(rows), 50)
+        self.assertEqual(raw, nifty50_bytes())
+        self.assertEqual(urlopen.call_count, 2)
+        self.assertEqual(urlopen.call_args_list[0].kwargs["timeout"], 60)
+        sleep.assert_called_once_with(1)
+
+    def test_nifty50_persistent_timeout_fails_closed_after_retries(self):
+        with patch("broker.data_pipeline.urllib.request.urlopen",
+                   side_effect=TimeoutError("persistent timeout")) as urlopen, \
+             patch("broker.data_pipeline.time.sleep") as sleep:
+            with self.assertRaisesRegex(ValidationError, "persistent timeout"):
+                fetch_nifty50_symbols(attempts=3, timeout=60)
+        self.assertEqual(urlopen.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
     def test_normalizes_eq_and_ignores_non_eq(self):
         payload = csv_bytes([
             "2026-11-06,RELIANCE,EQ,100,105,99,103,1000",
@@ -61,6 +103,7 @@ class NSEIngestionTests(unittest.TestCase):
                 "2026-11-06,RELIANCE,EQ,100,105,99,103,1000",
                 "2026-11-06,RELIANCE,EQ,100,105,99,103,1000",
             ]), date(2026, 11, 6), "2026-11-06T12:00:00+00:00")
+
 
 if __name__ == "__main__":
     unittest.main()
