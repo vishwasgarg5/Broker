@@ -1,0 +1,9 @@
+{
+ "schema_version":"1.0.0",
+ "mode":"research_and_paper_only",
+ "live_execution_enabled":false,
+ "broker_connectivity_enabled":false,
+ "defaults":{"atr_period":14,"stop_atr_multiple":1.5,"target_atr_multiple":2.5,"max_fractional_kelly":0.05,"kelly_scale":0.25,"max_single_position_fraction":0.02,"max_gross_exposure_fraction":0.50,"max_daily_loss_fraction":0.02,"max_drawdown_fraction":0.10},
+ "paper_trading":{"enabled":true,"include_brokerage":true,"include_exchange_fees":true,"include_taxes":true,"include_slippage":true,"enforce_liquidity_limits":true,"participation_rate_cap":0.05},
+ "promotion":{"minimum_out_of_sample_sessions":252,"minimum_walk_forward_folds":5,"require_positive_net_expectancy":true,"require_benchmark_comparison":true,"require_multiple_market_regimes":true,"require_paper_trading":true,"minimum_green_evaluation_sessions":60}
+}
