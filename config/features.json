@@ -1,0 +1,12 @@
+{
+ "schema_version":"1.0.0",
+ "feature_sets":{
+  "price_volume":["open","high","low","close","volume"],
+  "returns":["return_1d","return_5d","return_21d","return_63d"],
+  "technical":["rsi_14","atr_14","realized_volatility_20","sma_20","sma_50","sma_200"],
+  "fundamental":["pe_ttm","pb","roe","roce","sales_growth_3y","profit_growth_3y","dividend_yield"],
+  "market_context":["benchmark_return_1d","benchmark_return_5d","market_regime"]
+ },
+ "point_in_time":{"required_for_fundamentals":true,"availability_timestamp_required":true,"feature_timestamp_must_not_exceed_decision_timestamp":true,"fit_transform_on_training_data_only":true},
+ "missing_data":{"max_feature_missing_fraction":0.05,"imputation_must_be_fit_on_training_data_only":true,"never_impute_target":true}
+}
