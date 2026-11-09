@@ -1,0 +1,40 @@
+name: BROKER - Post-market evaluation
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Pre-market run ID for later cross-run artifact reconciliation"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 11 * * 1-5"
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: broker-post-market
+  cancel-in-progress: false
+jobs:
+  foundation-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate contracts and configuration
+        run: |
+          python -m unittest discover -s tests -v
+          PYTHONPATH=src python -m broker.validation
+      - name: Validate source run ID when supplied
+        if: ${{ github.event.inputs.source_run_id != '' }}
+        env:
+          SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
+        run: |
+          case "$SOURCE_RUN_ID" in *[!0-9]*|'') echo "source_run_id must be numeric" >&2; exit 1 ;; esac
+          echo "Source run requested: $SOURCE_RUN_ID"
+      - name: Keep evaluation fail-closed until verified inputs exist
+        run: |
+          echo "Evaluation is not enabled until later phases provide verified prediction and actual-price artifacts."
+          echo "Missing data must never be treated as a successful evaluation."
