@@ -65,7 +65,7 @@ jobs:
           find run_artifacts -type f | sort
           if [ -d run_artifacts/data/manifests ]; then
             echo "=== Manifests ==="
-            find run_artifacts/data/manifests -name '*.json' -exec echo '--- {} ---' \\; -exec cat {} \\;
+            find run_artifacts/data/manifests -name '*.json' -exec echo '--- {} ---' \; -exec cat {} \;
           fi
 
       - name: Upload run-scoped partial or complete artifacts
