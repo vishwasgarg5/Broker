@@ -43,21 +43,30 @@ def fetch_nifty50_symbols(attempts: int = 3, timeout: int = 60) -> tuple[list[di
             break
         except urllib.error.HTTPError as exc:
             last_error = exc
+            print(f"NSE Nifty 50 request failed: URL={NIFTY50_CSV_URL} "
+                  f"attempt={attempt + 1}/{attempts} HTTP={exc.code}: {exc}")
             if exc.code == 404:
                 raise ValidationError("NSE Nifty 50 constituent file not found (404)") from exc
             if exc.code in (403, 429, 500, 502, 503, 504) and attempt + 1 < attempts:
-                time.sleep(2 ** attempt)
+                delay = 2 ** attempt
+                print(f"Retrying NSE Nifty 50 request in {delay}s")
+                time.sleep(delay)
                 continue
             raise ValidationError(
                 f"Official NSE Nifty 50 download failed with HTTP {exc.code}"
             ) from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last_error = exc
+            print(f"NSE Nifty 50 request failed: URL={NIFTY50_CSV_URL} "
+                  f"attempt={attempt + 1}/{attempts}: {type(exc).__name__}: {exc}")
             if attempt + 1 < attempts:
-                time.sleep(2 ** attempt)
+                delay = 2 ** attempt
+                print(f"Retrying NSE Nifty 50 request in {delay}s")
+                time.sleep(delay)
                 continue
             raise ValidationError(
-                f"Official NSE Nifty 50 constituent download failed: {exc}"
+                f"Official NSE Nifty 50 constituent download failed after "
+                f"{attempts} attempts: {exc}"
             ) from exc
     else:
         raise ValidationError(
@@ -138,16 +147,36 @@ def main() -> None:
     parser.add_argument("--date", help="Latest acceptable NSE session (YYYY-MM-DD)")
     args = parser.parse_args()
     root = Path.cwd()
-    symbols, raw = fetch_nifty50_symbols()
-    universe_manifest = write_universe_observation(symbols, raw, root)
-    ohlcv_manifest = ingest_nse_ohlcv(date.fromisoformat(args.date) if args.date else None, root)
-    result = {
-        "status": "PASS",
-        "universe_observation": universe_manifest,
-        "ohlcv_ingestion": ohlcv_manifest,
-        "next_gate": "NIFTY50 membership remains non-PIT until effective-dated historical membership is sourced.",
-    }
+    target_date = date.fromisoformat(args.date) if args.date else None
+    result = {"status": "PASS", "failures": []}
+
+    # Run the primary cash-market feed first. A failure here does not prevent
+    # the independent Nifty 50 observation from being attempted.
+    try:
+        result["ohlcv_ingestion"] = ingest_nse_ohlcv(target_date, root)
+    except Exception as exc:
+        result["status"] = "FAIL"
+        result["failures"].append({
+            "source": NSE_SOURCE_ID,
+            "error": f"{type(exc).__name__}: {exc}",
+        })
+
+    try:
+        symbols, raw = fetch_nifty50_symbols()
+        result["universe_observation"] = write_universe_observation(symbols, raw, root)
+    except Exception as exc:
+        result["status"] = "FAIL"
+        result["failures"].append({
+            "source": "NSE_INDICES_NIFTY50_CONSTITUENTS",
+            "error": f"{type(exc).__name__}: {exc}",
+        })
+
+    result["next_gate"] = (
+        "NIFTY50 membership remains non-PIT until effective-dated historical membership is sourced."
+    )
     print(json.dumps(result, indent=2))
+    if result["status"] != "PASS":
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
