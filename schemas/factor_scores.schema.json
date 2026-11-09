@@ -1,0 +1,5 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"broker/factor-scores/1.0.0","title":"Point-in-time multi-factor score",
+ "type":"object","additionalProperties":false,"required":["schema_version","symbol","score_date","available_at","value_score","quality_score","growth_score","momentum_score","alpha_score","method_version","source_ids"],
+ "properties":{"schema_version":{"const":"1.0.0"},"symbol":{"type":"string","minLength":1},"score_date":{"type":"string","format":"date"},"available_at":{"type":"string","format":"date-time"},"value_score":{"type":["number","null"]},"quality_score":{"type":["number","null"]},"growth_score":{"type":["number","null"]},"momentum_score":{"type":["number","null"]},"alpha_score":{"type":["number","null"]},"method_version":{"type":"string","minLength":1},"source_ids":{"type":"array","items":{"type":"string","minLength":1},"minItems":1}}
+}
