@@ -5,12 +5,13 @@ import unittest
 import zipfile
 from datetime import date
 from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from broker.nse_ingest import normalize_bhavcopy, _extract_csv
-from broker.data_pipeline import fetch_nifty50_symbols
+from broker.data_pipeline import fetch_nifty50_symbols, main as run_data_pipeline
 from broker.validation import ValidationError
 
 HEADERS = "TradDt,TckrSymb,SctySrs,OpnPric,HghPric,LwPric,ClsPric,TtlTradgVol"
@@ -58,6 +59,25 @@ class NSEIngestionTests(unittest.TestCase):
                 fetch_nifty50_symbols(attempts=3, timeout=60)
         self.assertEqual(urlopen.call_count, 3)
         self.assertEqual(sleep.call_count, 2)
+
+    def test_pipeline_preserves_udiff_result_when_nifty50_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            udiff_manifest = {"source_id": "NSE_CM_UDIFF_BHAVCOPY", "record_count": 1}
+            with patch("sys.argv", ["data_pipeline.py"]), \
+                 patch("broker.data_pipeline.Path.cwd", return_value=root), \
+                 patch("broker.data_pipeline.ingest_nse_ohlcv", return_value=udiff_manifest) as udiff, \
+                 patch("broker.data_pipeline.fetch_nifty50_symbols",
+                       side_effect=ValidationError("Nifty endpoint timeout")), \
+                 patch("builtins.print") as output:
+                with self.assertRaises(SystemExit) as raised:
+                    run_data_pipeline()
+            self.assertEqual(raised.exception.code, 1)
+            udiff.assert_called_once_with(None, root)
+            printed = output.call_args.args[0]
+            self.assertIn('"status": "FAIL"', printed)
+            self.assertIn('"ohlcv_ingestion"', printed)
+            self.assertIn("Nifty endpoint timeout", printed)
 
     def test_normalizes_eq_and_ignores_non_eq(self):
         payload = csv_bytes([
